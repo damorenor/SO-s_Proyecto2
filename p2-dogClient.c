@@ -8,11 +8,32 @@
 #include<unistd.h>
 #define PORT 3535
 #define BACKLOG 2
+#define NOMBRE_SIZE 32
+#define TIPO_SIZE 32
+#define RAZA_SIZE 16
+
+struct sockaddr_in server, client1;
+int fd;
+size_t tama;
+
+struct dogType
+{
+        unsigned char nombre [NOMBRE_SIZE];
+        unsigned char tipo [TIPO_SIZE];
+        int edad;
+        unsigned char raza [RAZA_SIZE];
+        int estatura;
+        float peso;
+        unsigned char sexo;
+		int idPrev;
+};
 
 void enterPet();
 void seePet();
 void deletePet();
 void searchPet();
+
+void imprimirMascota();
 
 void menu(){
 	//Se imprime en consola el menú de usuario
@@ -33,13 +54,13 @@ void menu(){
 			enterPet();
 			break;
 		case 2:
-			seePet();
+			//seePet();
 			break;
 		case 3:
-			deletePet();
+			//deletePet();
 			break;
 		case 4:
-			searchPet();
+			//searchPet();
 			break;
 		case 5:
 			//Agregar cierres conexión bla bla
@@ -57,10 +78,25 @@ void run(){
 	}
 }
 int main(){
+	
+	fd = socket(AF_INET, SOCK_STREAM,0);
+	
+	if(fd == -1){
+		perror("error generando socket");
+		exit(-1);
+	}
+	
+	server.sin_family = AF_INET;
+	server.sin_port = htons(PORT);
+	server.sin_addr.s_addr = inet_addr("127.0.0.1");
+	bzero(server.sin_zero,8);
+	tama = sizeof(struct sockaddr_in);
 	run();
 }
 
 void enterPet(){
+	char buffer[20];
+	memset(buffer,0, sizeof(buffer) );
 	//Manda al server opción
 	system("clear");
 	printf("Ingrese porfavor los datos de la mascota:\n\n");
@@ -90,10 +126,46 @@ void enterPet(){
 	scanf("%s",&mascota->sexo);
 	printf("\n\n" );
 	
+
+	imprimirMascota(mascota);	
 	//Manda la mascota
+	int r = connect(fd,(struct sockaddr *)&server,tama);
+	if(r == -1){
+		perror("error por el connect");
+		exit(-1);
+	}
 
+	r = send(fd,mascota,sizeof(struct dogType), 0);
+	if( r == 0 ){
+		perror("error en el send");
+		exit(-1);
+	}	
+	
+	printf("%zu\n%d\n", sizeof(mascota),r);
 	//Recibe confirmación
-
+	r = recv(fd, buffer,10,0);
+	if(r == 0){
+		perror("error por el connect");
+		exit(-1);
+	}
+	printf("%s\n", buffer);
 	//exit() bla bla bla
+	printf("\ncambios en la historia clinica realizados ingrese un caracter para continuar");
+	char end;
+	scanf("%s",&end);
+
 	free(mascota);
+}
+
+void imprimirMascota( struct dogType * mascota )
+{
+
+	printf("NOMBRE: %s\n", mascota -> nombre );
+	printf("TIPO: %s\n", mascota -> tipo );
+	printf("EDAD: %d\n", mascota -> edad );
+	printf("RAZA: %s\n", mascota -> raza );
+	printf("ESTATURA: %d\n", mascota -> estatura );
+	printf("PESO: %f\n", mascota -> peso );
+	printf("SEXO: %c\n", mascota -> sexo );
+	printf("\n\n" );
 }
