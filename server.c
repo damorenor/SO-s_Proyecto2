@@ -485,7 +485,7 @@ int RegisterFromClient()
 	int registerId;
 	
 	r = recv(fd1, &registerId,sizeof(registerId),0);
-	if( r == sizeof(registerId))
+	if( r != sizeof(registerId))
 	{
 		perror("error recibiendo id del cliente");
 		exit(-1);
