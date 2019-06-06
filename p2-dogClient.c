@@ -51,18 +51,43 @@ void menu(){
 	scanf("%hd",&option);
 	switch(option){
 		case 1:
+			r = send(fd,1,sizeof(int), 0);
+			if( r == 0 ){
+				perror("error en el send");
+				exit(-1);
+			}
 			enterPet();
 			break;
 		case 2:
+			r = send(fd,2,sizeof(int), 0);
+			if( r == 0 ){
+				perror("error en el send");
+				exit(-1);
+			}
 			seePet();
 			break;
 		case 3:
+			r = send(fd,3,sizeof(int), 0);
+			if( r == 0 ){
+				perror("error en el send");
+				exit(-1);
+			}
 			deletePet();
 			break;
 		case 4:
+			r = send(fd,4,sizeof(int), 0);
+			if( r == 0 ){
+				perror("error en el send");
+				exit(-1);
+			}
 			searchPet();
 			break;
 		case 5:
+			r = send(fd,5,sizeof(int), 0);
+			if( r == 0 ){
+				perror("error en el send");
+				exit(-1);
+			}
 			close(fd);
 			exit( 0 );
 
