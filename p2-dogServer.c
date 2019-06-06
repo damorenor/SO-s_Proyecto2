@@ -8,6 +8,7 @@
 
 #define PORT 3535
 #define BACKLOG 2
+#define MAX_CLIENTS 32
 
 #define NOMBRE_SIZE 32
 #define TIPO_SIZE 32
@@ -41,7 +42,7 @@ void deletePet();
 void searchPet();
 
 int * lastID;
-int fd, fd1;
+int fd, fdc[MAX_CLIENTS];
 
 
 int getHash();
@@ -54,24 +55,22 @@ void SendMascota();
 int RegisterFromClient();
 void SendConfirmation();
 
-void finishAll()
+struct sockaddr_in server, client[MAX_CLIENTS];
+
+
+void finishAll( int clientId )
 {
 	free(lastID);
-	saveHeads();
 
-	close(fd1);
-	close(fd);
-
-	exit(0);
 }
 
 //Carga el menu
-void menu()
+void menu( int clientId )
 {
 	//Se recibe por el cliente un entero que corresponde a la funcionalidad escogida
 	short option;
 	
-	int r = recv(fd1, &option, sizeof(option),0);
+	int r = recv(fdc[clientId], &option, sizeof(option),0);
 	if(r == 0)
 	{
 		perror("error por el connect");
@@ -81,21 +80,22 @@ void menu()
 	switch(option)
 	{
 		case 1:
-			enterPet();
+			enterPet(clientId);
 			break;
 		case 2:
-			seePet();
+			seePet(clientId);
 			break;
 		case 3:
-			deletePet();
+			deletePet(clientId);
 			break;
 		case 4:
-			searchPet();
+			searchPet(clientId);
 			break;
 		case 5:
-			finishAll();
+			close(fdc[clientId]);
 		default:
 		printf("ingrese una opción valida\n");
+		saveHeads();
 	}	
 }
 
@@ -107,13 +107,44 @@ int main()
 	loadHeads();
 	initServer();
 
-	while( 1 ) menu();
+	while( 1 ) 
+	{
+		
+		int idx = 0;
+
+		while( idx < MAX_CLIENTS && fdc[idx] ) ++idx;
+
+		if( idx == MAX_CLIENTS ) 
+		{
+			perror("Limite de clientes superado");
+			exit(-1);
+
+		}	
+
+
+		socklen_t tamaClient = 0;	
+		fdc[idx] = accept(fd, (struct sockaddr *)&client[idx], &tamaClient);
+		
+
+		if( fdc[idx] == -1 )
+		{
+			perror("error en el accept");
+			exit(-1);
+		}
+
+
+		//Se crea el hilo para el nuevo cliente
+		
+		//temporal para probar xd
+		while ( 1 ) menu( idx );
+		
+	}
 
 	return 0;
 }
 
 
-void enterPet()
+void enterPet( int clientId )
 {
 	struct dogType * mascota;
 	mascota = ( struct  dogType *) malloc( sizeof ( struct dogType ) );
@@ -123,7 +154,7 @@ void enterPet()
 		exit( -1 );
 	}
 
-	int r = recv(fd1, mascota, sizeof(struct dogType),0);
+	int r = recv(fdc[clientId], mascota, sizeof(struct dogType),0);
 	
 	if( r != sizeof(struct dogType) )
 	{
@@ -138,14 +169,14 @@ void enterPet()
 	saveDog( mascota );
 	free(mascota);
 
-	SendConfirmation(1);	
+	SendConfirmation(1, clientId);	
 }
 
 
-void seePet()
+void seePet( int clientId )
 {
 
-	int registerId = RegisterFromClient();
+	int registerId = RegisterFromClient( clientId );
 	
 	struct dogType * mascota;
 	mascota = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
@@ -156,14 +187,14 @@ void seePet()
 	}
 
 	getMascota(registerId, mascota);
-	SendMascota(mascota);
+	SendMascota(mascota, clientId );
 
-	unsigned char hcName [20];//hc es historia clílica
+	unsigned char hcName [22];//hc es historia clílica
 	memset( hcName,0, sizeof (hcName));
-	unsigned char hcFile [20];
+	unsigned char hcFile [22];
 	memset( hcFile,0, sizeof (hcFile));
 
-	sprintf(hcName, "%d", registerId);
+	sprintf(hcName, "%d", registerId + 1);
 	strcat(hcName,"hc.txt");
 
 	if( access( hcName, F_OK ) == -1 )
@@ -174,8 +205,9 @@ void seePet()
 	strcat(hcFile,"gedit ");
 	strcat(hcFile, hcName);
 
-	
-	int r = send(fd1, hcFile, sizeof(hcFile), 0);
+	printf("%s\n", hcFile );
+
+	int r = send(fdc[clientId], hcFile, sizeof(hcFile), 0);
 	if( r != sizeof(hcFile) )
 	{
 		perror("Error enviando comando historia clinica");
@@ -186,10 +218,10 @@ void seePet()
 
 
 
-void deletePet()
+void deletePet(int clientId )
 {
 
-	int registerId = RegisterFromClient();
+	int registerId = RegisterFromClient( clientId );
 		
 	struct dogType * mascotaFinal;
 	mascotaFinal = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
@@ -404,14 +436,14 @@ void deletePet()
 	free(tmp);
 	free(tmp2);
 
-	SendConfirmation(1);
+	SendConfirmation(1, clientId );
 }
 
-void searchPet()
+void searchPet( int clientId )
 {
 	unsigned char buff[NOMBRE_SIZE];
 
-	int r = recv(fd1, buff, sizeof( buff ), 0 );
+	int r = recv(fdc[clientId], buff, sizeof( buff ), 0 );
 	if( r != sizeof ( buff ) )
 	{
 		perror("Error recibiendo nombre a buscar");
@@ -450,19 +482,19 @@ void searchPet()
 		}
 		if( equal )
 		{
-			SendConfirmation(currId+1);
-			SendMascota( mascota );	
+			SendConfirmation(currId+1, clientId );
+			SendMascota( mascota, clientId );	
 		}
 		currId = mascota -> idPrev;
 	}
 
 	free(mascota);
-	SendConfirmation(-1);
+	SendConfirmation(-1, clientId );
 }
 
-void SendConfirmation(int confirmation) 
+void SendConfirmation(int confirmation, int clientId ) 
 {
-	int r = send(fd1, &confirmation, sizeof(confirmation), 0);
+	int r = send(fdc[clientId], &confirmation, sizeof(confirmation), 0);
 	if( r != sizeof(confirmation) )
 	{
 		perror("Error enviando confirmacion al cliente");
@@ -470,10 +502,10 @@ void SendConfirmation(int confirmation)
 	}
 }
 
-int RegisterFromClient()
+int RegisterFromClient( int clientId )
 {
 	int auxCount = countRegisters();
-	int r = send(fd1, &auxCount, sizeof(auxCount), 0);
+	int r = send(fdc[clientId], &auxCount, sizeof(auxCount), 0);
 	
 	if( r != sizeof( auxCount) )
 	{
@@ -484,7 +516,7 @@ int RegisterFromClient()
 
 	int registerId;
 	
-	r = recv(fd1, &registerId,sizeof(registerId),0);
+	r = recv(fdc[clientId], &registerId,sizeof(registerId),0);
 	if( r != sizeof(registerId))
 	{
 		perror("error recibiendo id del cliente");
@@ -520,9 +552,9 @@ void getMascota( int idx, struct dogType * mascota )
 	fclose( g );
 }
 
-void SendMascota( struct dogType * mascota )
+void SendMascota( struct dogType * mascota, int clientId )
 {
-	int r = send(fd1, mascota, sizeof(struct dogType), 0);
+	int r = send(fdc[clientId], mascota, sizeof(struct dogType), 0);
 	if( r != sizeof(struct dogType) )
 	{
 		perror("Error enviando mascota el cliente");
@@ -565,7 +597,6 @@ void loadHeads()
 
 void initServer()
 {
-	struct sockaddr_in server, client1;
 	fd = socket(AF_INET, SOCK_STREAM,0);
 	
 	if(fd == -1)
@@ -585,24 +616,12 @@ void initServer()
 		perror("error en el bind");
 		exit(-1);
 	}
-
 	r = listen(fd,BACKLOG);
 	if(r == -1)
 	{
 		perror("error en el listen");
 		exit(-1);
 	}
-	
-	socklen_t  tamaClient = 0;	
-	fd1 = accept(fd, (struct sockaddr *)&client1, &tamaClient);
-	
-	if( fd1 == -1 )
-	{
-		perror("error en el accept");
-		exit(-1);
-	}
-
-
 }
 
 void saveHeads()

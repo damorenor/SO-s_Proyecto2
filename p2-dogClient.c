@@ -223,13 +223,15 @@ void seePet(){
 
 	imprimirMascota(mascota);
 
-	unsigned char hcfile[20];
+	unsigned char hcfile[22];
 	memset( hcfile, 0, sizeof hcfile);	
-	r = recv(fd,hcfile,20,0);
+	r = recv(fd,hcfile, sizeof hcfile,0);
 	if(r == 0){
 		perror("error por el connect");
 		exit(-1);
 	}	
+
+	printf("%s\n", hcfile );
 
 	system(hcfile);
 
