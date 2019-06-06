@@ -13,7 +13,7 @@
 #define RAZA_SIZE 16
 
 struct sockaddr_in server, client1;
-int fd;
+int fd,r;
 size_t tama;
 
 struct dogType
@@ -54,16 +54,16 @@ void menu(){
 			enterPet();
 			break;
 		case 2:
-			//seePet();
+			seePet();
 			break;
 		case 3:
-			//deletePet();
+			deletePet();
 			break;
 		case 4:
-			//searchPet();
+			searchPet();
 			break;
 		case 5:
-			//Agregar cierres conexión bla bla
+			close(fd);
 			exit( 0 );
 
 		default:
@@ -91,13 +91,17 @@ int main(){
 	server.sin_addr.s_addr = inet_addr("127.0.0.1");
 	bzero(server.sin_zero,8);
 	tama = sizeof(struct sockaddr_in);
+
+	r = connect(fd,(struct sockaddr *)&server,tama);
+	if(r == -1){
+		perror("error por el connect");
+		exit(-1);
+	}
 	run();
 }
 
 void enterPet(){
-	char buffer[20];
-	memset(buffer,0, sizeof(buffer) );
-	//Manda al server opción
+	//Manda al server opciónh
 	system("clear");
 	printf("Ingrese porfavor los datos de la mascota:\n\n");
 
@@ -129,32 +133,178 @@ void enterPet(){
 
 	imprimirMascota(mascota);	
 	//Manda la mascota
-	int r = connect(fd,(struct sockaddr *)&server,tama);
-	if(r == -1){
-		perror("error por el connect");
-		exit(-1);
-	}
-
 	r = send(fd,mascota,sizeof(struct dogType), 0);
 	if( r == 0 ){
 		perror("error en el send");
 		exit(-1);
-	}	
+	}
 	
-	printf("%zu\n%d\n", sizeof(mascota),r);
 	//Recibe confirmación
-	r = recv(fd, buffer,10,0);
+	int check;
+	r = recv(fd,&check,sizeof(int),0);
+	if(r == 0){
+		perror("error por el connect");
+		exit(-1);
+	}	
+
+	if(check == 1){
+		printf("\nEl registro de la mascota se ha ingresado satisfactoriamente\n");
+	}
+
+	free(mascota);
+
+	printf("Presione Enter para continuar\n");
+	char enter = 0;
+	while (enter != '\r' && enter != '\n') { 
+		enter = getchar();
+	}
+}
+
+void seePet(){
+	system("clear");
+	printf("Numero de perros registrados: ");
+	int totalRegister, check;
+	struct dogType * mascota;
+	mascota = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
+	if( mascota == NULL )
+	{
+		perror("error en el malloc de la mascota");
+		exit( -1 );
+	}
+
+	r = recv(fd,&totalRegister,sizeof(int),0);
 	if(r == 0){
 		perror("error por el connect");
 		exit(-1);
 	}
-	printf("%s\n", buffer);
-	//exit() bla bla bla
-	printf("\ncambios en la historia clinica realizados ingrese un caracter para continuar");
-	char end;
-	scanf("%s",&end);
+	printf("%d\n", totalRegister);
+
+	printf("Ingrese el id de la mascota que desea ver:\n");
+	int registerId;
+	scanf("%d",&registerId);
+
+	r = send(fd,&registerId,sizeof(int), 0);
+	if( r == 0 ){
+		perror("error en el send");
+		exit(-1);
+	}
+
+	r = recv(fd,mascota,sizeof(struct dogType),0);
+	if(r == 0){
+		perror("error por el connect");
+		exit(-1);
+	}
+
+	imprimirMascota(mascota);
+
+	unsigned char hcfile[20];
+	r = recv(fd,hcfile,sizeof(20),0);
+	if(r == 0){
+		perror("error por el connect");
+		exit(-1);
+	}	
+
+	system(hcfile);
 
 	free(mascota);
+
+	printf("\nPresione Enter para continuar\n");
+	char enter = 0;
+	while (enter != '\r' && enter != '\n') { 
+		enter = getchar();
+	}
+}
+
+void deletePet(){
+	system("clear");
+	printf("Numero de perros registrados: ");
+	int totalRegister, id_deleted,check;
+
+	r = recv(fd,&totalRegister,sizeof(int),0);
+	if(r == 0){
+		perror("error por el connect");
+		exit(-1);
+	}
+	printf("%d\n", totalRegister);
+
+	printf("Ingrese el id de la mascota que desea eliminar:\n");
+	scanf("%d",&id_deleted);
+
+	r = send(fd,&id_deleted,sizeof(int), 0);
+	if( r == 0 ){
+		perror("error en el send");
+		exit(-1);
+	}
+
+	r = recv(fd,&check,sizeof(int),0);
+	if(r == 0){
+		perror("error por el connect");
+		exit(-1);
+	}	
+
+	if(check == 1){
+		printf("\nEl registro de la mascota se ha eliminado satisfactoriamente\n");
+	}
+
+	printf("\nPresione Enter para continuar\n");
+	char enter = 0;
+	while (enter != '\r' && enter != '\n') { 
+		enter = getchar();
+	}
+}
+
+void searchPet(){
+	struct dogType * mascota;
+	mascota = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
+	if( mascota == NULL )
+	{
+		perror("error en el malloc de la mascota");
+		exit( -1 );
+	}
+
+	system("clear");
+	printf("Ingrese el nombre de la mascota que quiere buscar:\n" );
+
+	unsigned char buff[NOMBRE_SIZE];
+
+	
+	memset( buff, 0, sizeof buff );	
+	scanf("%s", buff );
+	printf("\n");
+
+	r = send(fd,buff,NOMBRE_SIZE, 0);
+	if( r == 0 ){
+		perror("error en el send");
+		exit(-1);
+	}
+
+	int id_searched;
+	while(1){
+		r = recv(fd,&id_searched,sizeof(int),0);
+		if(r == 0){
+			perror("error por el connect");
+			exit(-1);
+		}
+
+		if(id_searched == -1){
+			break;
+		}else{
+			r = recv(fd,mascota,sizeof(struct dogType),0);
+			if(r == 0){
+				perror("error por el connect");
+				exit(-1);
+			}
+			imprimirMascota(mascota);
+		}
+	}
+
+	free(mascota);
+
+	printf("\nPresione Enter para continuar\n");
+	char enter = 0;
+	while (enter != '\r' && enter != '\n') { 
+		enter = getchar();
+	}
 }
 
 void imprimirMascota( struct dogType * mascota )
