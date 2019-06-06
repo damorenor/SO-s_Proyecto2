@@ -180,6 +180,7 @@ void enterPet(){
 
 	printf("Presione Enter para continuar\n");
 	char enter = 0;
+	getchar();
 	while (enter != '\r' && enter != '\n') { 
 		enter = getchar();
 	}
@@ -223,7 +224,8 @@ void seePet(){
 	imprimirMascota(mascota);
 
 	unsigned char hcfile[20];
-	r = recv(fd,hcfile,sizeof(20),0);
+	memset( hcfile, 0, sizeof hcfile);	
+	r = recv(fd,hcfile,20,0);
 	if(r == 0){
 		perror("error por el connect");
 		exit(-1);
@@ -273,6 +275,7 @@ void deletePet(){
 
 	printf("\nPresione Enter para continuar\n");
 	char enter = 0;
+	getchar();
 	while (enter != '\r' && enter != '\n') { 
 		enter = getchar();
 	}
@@ -327,6 +330,7 @@ void searchPet(){
 
 	printf("\nPresione Enter para continuar\n");
 	char enter = 0;
+	getchar();
 	while (enter != '\r' && enter != '\n') { 
 		enter = getchar();
 	}
