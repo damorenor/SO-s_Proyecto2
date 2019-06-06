@@ -237,6 +237,7 @@ void seePet(){
 
 	printf("\nPresione Enter para continuar\n");
 	char enter = 0;
+	getchar();
 	while (enter != '\r' && enter != '\n') { 
 		enter = getchar();
 	}
