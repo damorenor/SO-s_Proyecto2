@@ -1,11 +1,13 @@
-#include<stdio.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
+#include <arpa/inet.h>
 
 #define PORT 3535
 #define BACKLOG 2
@@ -31,6 +33,15 @@ struct dogType
 	int idPrev;
 };
 
+struct logData
+{
+        unsigned char date [NOMBRE_SIZE];
+        unsigned char ip [NOMBRE_SIZE];
+        unsigned char operation [NOMBRE_SIZE];
+        unsigned char cause[NOMBRE_SIZE];
+};
+
+
 void initPointers();
 void loadHeads();
 void initServer();
@@ -45,6 +56,9 @@ void searchPet();
 int * lastID;
 int fd, fdc[MAX_CLIENTS];
 
+unsigned char operation [NOMBRE_SIZE];
+unsigned char cause [NOMBRE_SIZE];
+
 
 int getHash();
 int countRegisters();
@@ -55,8 +69,10 @@ void getMascota();
 void SendMascota();
 int RegisterFromClient();
 void SendConfirmation();
+void logOperation();
 
 struct sockaddr_in server, client[MAX_CLIENTS];
+struct in_addr ipServer;
 
 
 //Carga el menu
@@ -143,7 +159,8 @@ int main()
 
 		
 		pthread_create(&idThread[idx], NULL, run, (void*)&arg[idx]);
-			
+		
+
 	}
 
 	return 0;
@@ -173,9 +190,17 @@ void enterPet( int clientId )
 	lastID[hash] = countRegisters();
 
 	saveDog( mascota );
-	free(mascota);
 
 	SendConfirmation(1, clientId);	
+
+    memset( &operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    strcat( operation, "inserción");
+
+    memset( &cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    strcat( cause, mascota->nombre); 
+
+    logOperation(operation,cause);
+    free(mascota);
 }
 
 
@@ -219,6 +244,14 @@ void seePet( int clientId )
 		exit(-1);
 	}
 	free(mascota);
+
+	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    strcat( operation, "lectura");
+
+    memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    sprintf( cause, "%d",registerId);
+
+    logOperation(operation,cause);  
 }
 
 
@@ -438,12 +471,21 @@ void deletePet(int clientId )
 	}
 
 
+    memset( &operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    strcat( operation, "borrado");
+
+    memset( &cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    sprintf( cause,"%d", registerId);
+
 	free(mascotaFinal);
 	free(mascotaDelete);
 	free(tmp);
 	free(tmp2);
 
 	SendConfirmation(1, clientId );
+
+
+    logOperation(operation,cause);  
 }
 
 void searchPet( int clientId )
@@ -497,6 +539,14 @@ void searchPet( int clientId )
 
 	free(mascota);
 	SendConfirmation(-1, clientId );
+
+	memset( &operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    strcat( operation, "búsqueda");
+
+    memset( &cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+    strcat( cause, buff);
+
+    logOperation(operation,cause);
 }
 
 void SendConfirmation(int confirmation, int clientId ) 
@@ -614,6 +664,7 @@ void initServer()
 	server.sin_family = AF_INET;
 	server.sin_port = htons(PORT);
 	server.sin_addr.s_addr = INADDR_ANY;
+	ipServer = server.sin_addr;
 	bzero(server.sin_zero,8);
 
 	size_t tama = sizeof(struct sockaddr_in);
@@ -776,4 +827,64 @@ void generateHc(char* hcName, struct dogType* mascota){
 	}
 
 	fclose(hc);
+}
+
+void logOperation(unsigned char* operation, unsigned char* cause){
+		struct logData * log;
+        log = ( struct  logData *) malloc( sizeof ( struct logData ) );
+        if( log == NULL )
+        {
+                perror("error en el malloc del log");
+                exit( -1 );
+        }
+
+        time_t t = time(NULL);
+        struct tm tm = *localtime(&t);
+        unsigned char actualTime [NOMBRE_SIZE];
+        memset( &actualTime, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+        unsigned char times [NOMBRE_SIZE];
+        memset( &times, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+
+        strcat(actualTime, "|");
+        sprintf(times, "%d", tm.tm_year + 1900);
+        strcat(actualTime, times);
+        strcat(actualTime, "|");
+        sprintf(actualTime, "%d",tm.tm_mon + 1);
+        strcat(actualTime, times);
+        strcat(actualTime, "|");
+        sprintf(actualTime, "%d",tm.tm_mday);
+        strcat(actualTime, times);
+        strcat(actualTime, "|");
+        sprintf(actualTime, "%d",tm.tm_hour);
+        strcat(actualTime, times);
+        strcat(actualTime, "|");
+        sprintf(actualTime, "%d",tm.tm_min);
+        strcat(actualTime, times);
+        strcat(actualTime, "|");
+        sprintf(actualTime, "%d",tm.tm_sec);
+        strcat(actualTime, times);
+        strcat(actualTime, "|");
+
+        strcpy(log->date, actualTime);
+
+        char ipAddr[INET_ADDRSTRLEN];
+		inet_ntop( AF_INET, &ipServer, ipAddr, INET_ADDRSTRLEN);
+        strcpy(log->ip, ipAddr);
+
+        strcpy(log->operation, operation);
+        strcpy(log->cause, cause);
+
+        FILE * logFile = fopen("dataDogs.log","a+");
+        if( logFile == NULL ){
+			perror("error abriendo archivo log");
+			exit( -1 );
+		}
+
+		int w = fwrite ( log, sizeof( struct logData ), 1, logFile );	
+		if (w==0){
+				perror("error escritura dbTmp");
+				exit(-1);
+		}
+
+		fclose(logFile);
 }
