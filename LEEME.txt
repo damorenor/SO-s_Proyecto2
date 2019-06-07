@@ -1,2 +1,27 @@
 damorenor
 joacarrilloco
+
+Manual de uso
+
+
+Primero compile los 3 programas con los comandos
+
+make generator
+make client
+make server
+
+A continuacion debe correr el generador con el comando
+
+./generator
+
+Desde este punto ya se puede ejecutar el servidor y una cantidad maxima de 32 clientes
+
+Para correr el servidor ejecute
+./server
+
+Para correr algun cliente ejecute
+./client
+
+
+
+
