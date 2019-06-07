@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define PORT 3535
 #define BACKLOG 2
@@ -58,14 +59,8 @@ void SendConfirmation();
 struct sockaddr_in server, client[MAX_CLIENTS];
 
 
-void finishAll( int clientId )
-{
-	free(lastID);
-
-}
-
 //Carga el menu
-void menu( int clientId )
+int menu( int clientId )
 {
 	//Se recibe por el cliente un entero que corresponde a la funcionalidad escogida
 	short option;
@@ -92,13 +87,25 @@ void menu( int clientId )
 			searchPet(clientId);
 			break;
 		case 5:
-			close(fdc[clientId]);
+			return 0; 
 		default:
 		printf("ingrese una opción valida\n");
-		saveHeads();
 	}	
+	saveHeads();
+	return 1;
 }
 
+pthread_t idThread[MAX_CLIENTS];
+int arg[MAX_CLIENTS];
+
+void *run( void * ap )
+{
+	int clientId = *(int*)ap;
+	while(menu(clientId));
+	pthread_join(idThread[clientId], NULL);
+	close(fdc[clientId]);
+	fdc[clientId] = 0;
+}
 
 int main()
 {
@@ -106,6 +113,9 @@ int main()
 	initPointers();
 	loadHeads();
 	initServer();
+
+	for( int i = 0; i < MAX_CLIENTS; ++ i )
+		arg[i] = i;
 
 	while( 1 ) 
 	{
@@ -121,7 +131,6 @@ int main()
 
 		}	
 
-
 		socklen_t tamaClient = 0;	
 		fdc[idx] = accept(fd, (struct sockaddr *)&client[idx], &tamaClient);
 		
@@ -132,12 +141,9 @@ int main()
 			exit(-1);
 		}
 
-
-		//Se crea el hilo para el nuevo cliente
 		
-		//temporal para probar xd
-		while ( 1 ) menu( idx );
-		
+		pthread_create(&idThread[idx], NULL, run, (void*)&arg[idx]);
+			
 	}
 
 	return 0;
@@ -205,7 +211,6 @@ void seePet( int clientId )
 	strcat(hcFile,"gedit ");
 	strcat(hcFile, hcName);
 
-	printf("%s\n", hcFile );
 
 	int r = send(fdc[clientId], hcFile, sizeof(hcFile), 0);
 	if( r != sizeof(hcFile) )
@@ -329,47 +334,9 @@ void deletePet(int clientId )
 
 	// aqui acaba lo feo :D
 
-	//Re escritura de historias clinicas
-	
-
-	// Primero se elimina la historia clinica de la mascota registerId
-	unsigned char hcNameDelete [20], hcNameLast [20];
-	memset( hcNameDelete,0, sizeof (hcNameDelete));
-	memset( hcNameLast, 0, sizeof (hcNameLast) );
-
-	sprintf(hcNameDelete, "%d", registerId);
-	strcat(hcNameDelete,"hc");
-	strcat(hcNameDelete,".txt");
-
-		
-	sprintf(hcNameLast, "%d", countRegisters() - 1);
-	strcat(hcNameLast,"hc");
-	strcat(hcNameLast,".txt");
-
-	int status;
-	if( access( hcNameDelete, F_OK ) != -1 ) { 
-		status = remove( hcNameDelete );	
-		if( status != 0 )
-		{
-			perror( "Error eliminando historia clinica" );
-			exit( -1 );
-
-		}
-	}	
-
-	//Ahora se renombra la historia clinica del ultimo	
-	
-	if( access( hcNameLast, F_OK ) != -1 ) {
-		status = rename( hcNameLast, hcNameDelete );
-		if( status != 0 )
-		{
-			perror( "Error en el renombramiento de la historio clinica" );
-			exit( -1 );
-		}
-		
-	}
-
 	//Re escritura del archivo	
+	
+	int status;
 	
 	FILE * dbTmp;
 	int check;
@@ -430,6 +397,46 @@ void deletePet(int clientId )
 		perror( "Error en el renombramiento de la base de datos" );
 		exit( -1 );
 	}
+
+	//Re escritura de historias clinicas
+	
+
+	// Primero se elimina la historia clinica de la mascota registerId
+	unsigned char hcNameDelete [22], hcNameLast [22];
+	memset( hcNameDelete,0, sizeof (hcNameDelete));
+	memset( hcNameLast, 0, sizeof (hcNameLast) );
+
+	sprintf(hcNameDelete, "%d", registerId + 1);
+	strcat(hcNameDelete,"hc");
+	strcat(hcNameDelete,".txt");
+
+		
+	sprintf(hcNameLast, "%d", countRegisters() + 1 );
+	strcat(hcNameLast,"hc");
+	strcat(hcNameLast,".txt");
+
+	if( access( hcNameDelete, F_OK ) != -1 ) { 
+		status = remove( hcNameDelete );	
+		if( status != 0 )
+		{
+			perror( "Error eliminando historia clinica" );
+			exit( -1 );
+
+		}
+	}	
+
+	//Ahora se renombra la historia clinica del ultimo	
+	
+	if( access( hcNameLast, F_OK ) != -1 ) {
+		status = rename( hcNameLast, hcNameDelete );
+		if( status != 0 )
+		{
+			perror( "Error en el renombramiento de la historio clinica" );
+			exit( -1 );
+		}
+		
+	}
+
 
 	free(mascotaFinal);
 	free(mascotaDelete);
@@ -639,7 +646,7 @@ void saveHeads()
         check = fwrite( lastID, HASH_SIZE * sizeof(int), 1, points );
         if( check == 0 )
 	{
-		perror("error en la lectura de apuntadores");	
+		perror("error en la escritura de apuntadores");	
 		exit( -1 );
 	}
 	fclose(points);

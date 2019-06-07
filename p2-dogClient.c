@@ -231,7 +231,6 @@ void seePet(){
 		exit(-1);
 	}	
 
-	printf("%s\n", hcfile );
 
 	system(hcfile);
 
