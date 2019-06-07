@@ -25,7 +25,7 @@ struct dogType
         int estatura;
         float peso;
         unsigned char sexo;
-		int idPrev;
+	int idPrev;
 };
 
 void enterPet();
