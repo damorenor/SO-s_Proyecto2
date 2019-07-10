@@ -8,6 +8,9 @@
 #include <pthread.h>
 #include <time.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <semaphore.h>
+#include <sys/stat.h>
 
 #define PORT 3535
 #define BACKLOG 2
@@ -74,6 +77,7 @@ void logOperation();
 struct sockaddr_in server, client[MAX_CLIENTS];
 struct in_addr ipServer;
 
+sem_t *semaphore;
 
 //Carga el menu
 int menu( int clientId )
@@ -133,6 +137,8 @@ int main()
 	for( int i = 0; i < MAX_CLIENTS; ++ i )
 		arg[i] = i;
 
+	semaphore = sem_open("semaphore_name",O_CREAT, NULL, MAX_CLIENTS);
+
 	while( 1 ) 
 	{
 		
@@ -158,8 +164,15 @@ int main()
 		}
 
 		
-		pthread_create(&idThread[idx], NULL, run, (void*)&arg[idx]);
-		
+		int error = pthread_create(&idThread[idx], NULL, run, (void*)&arg[idx]);
+		if (error != 0)
+		{
+			perror("error generando hilos");
+			exit(-1);
+		}
+
+		sem_close(semaphore);
+		sem_unlink("semaphore_name");
 
 	}
 
@@ -184,12 +197,17 @@ void enterPet( int clientId )
 		perror("Error reciviendo mascota del cliente");
 		exit(-1);
 	}
-
+	sem_wait(semaphore);
+	
 	int hash = getHash( mascota -> nombre );
 	mascota -> idPrev = lastID[hash];
 	lastID[hash] = countRegisters();
 
 	saveDog( mascota );
+
+	fflush(stdout);
+	sleep(1);
+	sem_post(semaphore);
 
 	SendConfirmation(1, clientId);	
 
@@ -206,7 +224,8 @@ void enterPet( int clientId )
 
 void seePet( int clientId )
 {
-
+	sem_wait(semaphore);
+	int hcConfirmation;
 	int registerId = RegisterFromClient( clientId );
 	
 	struct dogType * mascota;
@@ -243,21 +262,35 @@ void seePet( int clientId )
 		perror("Error enviando comando historia clinica");
 		exit(-1);
 	}
+
+	r = recv(fdc[clientId], &hcConfirmation,sizeof(int),0);
+	if( r != sizeof(registerId))
+	{
+		perror("error recibiendo id del cliente");
+		exit(-1);
+	}
+
+	fflush(stdout);
+	sleep(1);
+	sem_post(semaphore);
+
 	free(mascota);
 
 	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	strcat( operation, "lectura");
+	strcat( operation, "lectura");
 
-     	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	sprintf( cause, "%d",registerId);
+ 	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+	sprintf( cause, "%d",registerId);
 
-    	logOperation(operation,cause,clientId);
+	logOperation(operation,cause,clientId);
+
 }
 
 
 
 void deletePet(int clientId )
 {
+	sem_wait(semaphore);
 
 	int registerId = RegisterFromClient( clientId );
 		
@@ -456,7 +489,11 @@ void deletePet(int clientId )
 			exit( -1 );
 
 		}
-	}	
+	}
+
+	fflush(stdout);
+	sleep(1);
+	sem_post(semaphore);	
 
 	//Ahora se renombra la historia clinica del ultimo	
 	

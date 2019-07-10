@@ -189,7 +189,7 @@ void enterPet(){
 void seePet(){
 	system("clear");
 	printf("Numero de perros registrados: ");
-	int totalRegister, check;
+	int totalRegister, check , hcConfirmation;
 	struct dogType * mascota;
 	mascota = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
 	if( mascota == NULL )
