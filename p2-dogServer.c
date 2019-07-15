@@ -59,6 +59,7 @@ int fd, fdc[MAX_CLIENTS];
 unsigned char operation [NOMBRE_SIZE];
 unsigned char cause [NOMBRE_SIZE];
 
+pthread_mutex_t mutex;
 
 int getHash();
 int countRegisters();
@@ -119,6 +120,7 @@ void *run( void * ap )
 	int clientId = *(int*)ap;
 	while(menu(clientId));
 	pthread_join(idThread[clientId], NULL);
+	pthread_mutex_destroy(&mutex);
 	close(fdc[clientId]);
 	fdc[clientId] = 0;
 }
@@ -132,6 +134,12 @@ int main()
 
 	for( int i = 0; i < MAX_CLIENTS; ++ i )
 		arg[i] = i;
+
+	if (pthread_mutex_init(&mutex, NULL) != 0) 
+    { 
+        perror("error iniciando mutex") 
+        exit(-1); 
+    }  
 
 	while( 1 ) 
 	{
@@ -185,11 +193,15 @@ void enterPet( int clientId )
 		exit(-1);
 	}
 
+	pthread_mutex_lock(&mutex);
+
 	int hash = getHash( mascota -> nombre );
 	mascota -> idPrev = lastID[hash];
 	lastID[hash] = countRegisters();
 
 	saveDog( mascota );
+
+	pthread_mutex_unlock(&mutex);
 
 	SendConfirmation(1, clientId);	
 
@@ -208,7 +220,8 @@ void seePet( int clientId )
 {
 
 	int registerId = RegisterFromClient( clientId );
-	
+	int hcConfirmation;
+
 	struct dogType * mascota;
 	mascota = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
 	if( mascota == NULL )
@@ -216,6 +229,8 @@ void seePet( int clientId )
 		perror("error en el malloc de la mascota");
 		exit( -1 );
 	}
+
+	pthread_mutex_lock(&mutex);
 
 	getMascota(registerId, mascota);
 	SendMascota(mascota, clientId );
@@ -243,6 +258,15 @@ void seePet( int clientId )
 		perror("Error enviando comando historia clinica");
 		exit(-1);
 	}
+
+	r = recv(fdc[clientId], &hcConfirmation,sizeof(int),0);
+	if( r != sizeof(registerId))
+	{
+		perror("error recibiendo id del cliente");
+		exit(-1);
+	}
+
+	pthread_mutex_unlock(&mutex);
 	free(mascota);
 
 	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
@@ -258,9 +282,10 @@ void seePet( int clientId )
 
 void deletePet(int clientId )
 {
-
 	int registerId = RegisterFromClient( clientId );
-		
+	
+	pthread_mutex_lock(&mutex);
+
 	struct dogType * mascotaFinal;
 	mascotaFinal = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
 	if( mascotaFinal == NULL )
@@ -415,7 +440,7 @@ void deletePet(int clientId )
 			}
 		}
 	}
-	fclose(dbTmp); 
+	fclose(dbTmp);
 
 	status = remove( "dataDogs.dat" );	
 	if( status != 0 )
@@ -470,12 +495,12 @@ void deletePet(int clientId )
 		
 	}
 
+	pthread_mutex_unlock(&mutex);
+	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+	strcat( operation, "borrado");
 
-    	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	strcat( operation, "borrado");
-
-    	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	sprintf( cause,"%d", registerId);
+	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+	sprintf( cause,"%d", registerId);
 
 	free(mascotaFinal);
 	free(mascotaDelete);
