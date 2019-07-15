@@ -234,6 +234,12 @@ void seePet(){
 
 	system(hcfile);
 
+	r = send(fd,&registerId,sizeof(int), 0);
+	if( r == 0 ){
+		perror("error en el send");
+		exit(-1);
+	}
+
 	free(mascota);
 
 	printf("\nPresione Enter para continuar\n");

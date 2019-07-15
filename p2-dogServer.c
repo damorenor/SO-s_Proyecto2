@@ -171,11 +171,11 @@ int main()
 			exit(-1);
 		}
 
-		sem_close(semaphore);
-		sem_unlink("semaphore_name");
-
 	}
 
+	sem_close(semaphore);
+	sem_unlink("semaphore_name");
+	
 	return 0;
 }
 
