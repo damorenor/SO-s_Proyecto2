@@ -1,0 +1,8 @@
+NOMBRE: Ángel
+TIPO: perro
+EDAD: 9
+RAZA: Husky
+ESTATURA: 84
+PESO: 29.997299
+SEXO: M
+Historia clinica: 

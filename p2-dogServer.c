@@ -107,8 +107,10 @@ int menu( int clientId )
 			return 0; 
 		default:
 		printf("ingrese una opción valida\n");
-	}	
+	}
+	pthread_mutex_lock(&mutex);
 	saveHeads();
+	pthread_mutex_unlock(&mutex);
 	return 1;
 }
 
@@ -136,7 +138,7 @@ int main()
 
 	if (pthread_mutex_init(&mutex, NULL) != 0) 
     { 
-        perror("error iniciando mutex") 
+        perror("error iniciando mutex") ;
         exit(-1); 
     }  
 
@@ -233,6 +235,11 @@ void seePet( int clientId )
 	}
 
 	pthread_mutex_lock(&mutex);
+
+	if(registerId >= countRegisters() || registerId < 0){
+		printf("El número de registros ha cambiado o el registro es inválido\n");
+		return;
+	}
 
 	getMascota(registerId, mascota);
 	SendMascota(mascota, clientId );
@@ -530,6 +537,7 @@ void searchPet( int clientId )
 	int hash, currId, i, equal, a, b;
 	hash = getHash( buff );
 	
+	pthread_mutex_lock(&mutex);
 	currId = lastID[hash];
 
 	struct dogType * mascota;
@@ -564,6 +572,7 @@ void searchPet( int clientId )
 		}
 		currId = mascota -> idPrev;
 	}
+	pthread_mutex_unlock(&mutex);
 
 	free(mascota);
 	SendConfirmation(-1, clientId );
@@ -859,7 +868,7 @@ void generateHc(char* hcName, struct dogType* mascota){
 
 void logOperation(unsigned char* operation, unsigned char* cause, int clientId ){
 	
-
+	pthread_mutex_lock(&mutex);
 	struct logData * log;
         log = ( struct  logData *) malloc( sizeof ( struct logData ) );
         if( log == NULL )
@@ -896,19 +905,19 @@ void logOperation(unsigned char* operation, unsigned char* cause, int clientId )
         strcat(actualTime, times);
         strcat(actualTime, "|");
 	
-	memset( log->date, 0, NOMBRE_SIZE );
+		memset( log->date, 0, NOMBRE_SIZE );
         strcpy(log->date, actualTime);
 
 
         char ipAddr[INET_ADDRSTRLEN];
-	inet_ntop( AF_INET, &(client[clientId].sin_addr), ipAddr, INET_ADDRSTRLEN);
+		inet_ntop( AF_INET, &(client[clientId].sin_addr), ipAddr, INET_ADDRSTRLEN);
         
-	memset(log->ip, 0, NOMBRE_SIZE);	
+		memset(log->ip, 0, NOMBRE_SIZE);	
 
-	strcpy(log->ip, ipAddr);
+		strcpy(log->ip, ipAddr);
 
-	memset(log->operation,0,NOMBRE_SIZE);
-	memset(log->cause, 0, NOMBRE_SIZE);
+		memset(log->operation,0,NOMBRE_SIZE);
+		memset(log->cause, 0, NOMBRE_SIZE);
 
         strcpy(log->operation, operation);
         strcpy(log->cause, cause);
@@ -926,4 +935,5 @@ void logOperation(unsigned char* operation, unsigned char* cause, int clientId )
 	}
 	fclose(logFile);
 	free(log);
+	pthread_mutex_unlock(&mutex);
 }
