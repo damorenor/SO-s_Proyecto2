@@ -77,7 +77,7 @@ void logOperation();
 struct sockaddr_in server, client[MAX_CLIENTS];
 struct in_addr ipServer;
 
-sem_t *semaphore;
+sem_t semaphore;
 
 //Carga el menu
 int menu( int clientId )
@@ -111,11 +111,9 @@ int menu( int clientId )
 		default:
 		printf("ingrese una opción valida\n");
 	}	
-	sem_wait(semaphore);
+	sem_wait(&semaphore);
 	saveHeads();
-	fflush(stdout);
-	sleep(1);
-	sem_post(semaphore);
+	sem_post(&semaphore);
 
 	return 1;
 }
@@ -142,7 +140,7 @@ int main()
 	for( int i = 0; i < MAX_CLIENTS; ++ i )
 		arg[i] = i;
 
-	semaphore = sem_open("semaphore_name",O_CREAT, NULL, MAX_CLIENTS);
+	sem_init( &semaphore, 0, 1 );
 
 	while( 1 ) 
 	{
@@ -178,9 +176,7 @@ int main()
 
 	}
 
-	sem_close(semaphore);
-	sem_unlink("semaphore_name");
-	
+	sem_destroy(&semaphore);	
 	return 0;
 }
 
@@ -205,16 +201,14 @@ void enterPet( int clientId )
 	
 	int hash = getHash( mascota -> nombre );
 
-	sem_wait(semaphore);
+	sem_wait(&semaphore);
 
 	mascota -> idPrev = lastID[hash];
 	lastID[hash] = countRegisters();
 
 	saveDog( mascota );
 
-	fflush(stdout);
-	sleep(1);
-	sem_post(semaphore);
+	sem_post(&semaphore);
 
 	SendConfirmation(1, clientId);	
 
@@ -243,7 +237,7 @@ void seePet( int clientId )
 		exit( -1 );
 	}
 
-	sem_wait(semaphore);
+	sem_wait(&semaphore);
 	if(registerId >= countRegisters() || registerId < 0){
 		printf("El número de registros ha cambiado o el registro es inválido\n");
 		return;
@@ -276,9 +270,7 @@ void seePet( int clientId )
 		exit(-1);
 	}
 
-	fflush(stdout);
-	sleep(1);
-	sem_post(semaphore);
+	sem_post(&semaphore);
 
 	r = recv(fdc[clientId], &hcConfirmation,sizeof(int),0);
 	if( r != sizeof(registerId))
@@ -316,7 +308,7 @@ void deletePet(int clientId )
 		exit( -1 );
 	}
 
-	sem_wait(semaphore);
+	sem_wait(&semaphore);
 	getMascota( countRegisters()-1, mascotaFinal );
 
 	struct dogType * mascotaDelete;
@@ -520,9 +512,7 @@ void deletePet(int clientId )
 		
 	}
 
-	fflush(stdout);
-	sleep(1);
-	sem_post(semaphore);
+	sem_post(&semaphore);
 
 	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
 	strcat( operation, "borrado");
@@ -554,7 +544,7 @@ void searchPet( int clientId )
 	int hash, currId, i, equal, a, b;
 	hash = getHash( buff );
 	
-	sem_wait(semaphore);
+	sem_wait(&semaphore);
 	currId = lastID[hash];
 
 	struct dogType * mascota;
@@ -590,9 +580,7 @@ void searchPet( int clientId )
 		currId = mascota -> idPrev;
 	}
 
-	fflush(stdout);
-	sleep(1);
-	sem_post(semaphore);
+	sem_post(&semaphore);
 	free(mascota);
 	SendConfirmation(-1, clientId );
 
@@ -887,7 +875,7 @@ void generateHc(char* hcName, struct dogType* mascota){
 
 void logOperation(unsigned char* operation, unsigned char* cause, int clientId ){
 	
-	sem_wait(semaphore);
+	sem_wait(&semaphore);
 	struct logData * log;
         log = ( struct  logData *) malloc( sizeof ( struct logData ) );
         if( log == NULL )
@@ -954,7 +942,5 @@ void logOperation(unsigned char* operation, unsigned char* cause, int clientId )
 	}
 	fclose(logFile);
 	free(log);
-	fflush(stdout);
-	sleep(1);
-	sem_post(semaphore);
+	sem_post(&semaphore);
 }
