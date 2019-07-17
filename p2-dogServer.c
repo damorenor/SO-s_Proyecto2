@@ -120,7 +120,6 @@ void *run( void * ap )
 	int clientId = *(int*)ap;
 	while(menu(clientId));
 	pthread_join(idThread[clientId], NULL);
-	pthread_mutex_destroy(&mutex);
 	close(fdc[clientId]);
 	fdc[clientId] = 0;
 }
@@ -171,6 +170,7 @@ int main()
 
 	}
 
+	pthread_mutex_destroy(&mutex);
 	return 0;
 }
 
@@ -193,9 +193,11 @@ void enterPet( int clientId )
 		exit(-1);
 	}
 
-	pthread_mutex_lock(&mutex);
 
 	int hash = getHash( mascota -> nombre );
+
+	pthread_mutex_lock(&mutex);
+
 	mascota -> idPrev = lastID[hash];
 	lastID[hash] = countRegisters();
 
@@ -258,6 +260,7 @@ void seePet( int clientId )
 		perror("Error enviando comando historia clinica");
 		exit(-1);
 	}
+	pthread_mutex_unlock(&mutex);
 
 	r = recv(fdc[clientId], &hcConfirmation,sizeof(int),0);
 	if( r != sizeof(registerId))
@@ -266,16 +269,17 @@ void seePet( int clientId )
 		exit(-1);
 	}
 
-	pthread_mutex_unlock(&mutex);
+	
+
 	free(mascota);
 
 	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	strcat( operation, "lectura");
+	strcat( operation, "lectura");
 
-     	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	sprintf( cause, "%d",registerId);
+ 	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+	sprintf( cause, "%d",registerId);
 
-    	logOperation(operation,cause,clientId);
+	logOperation(operation,cause,clientId);
 }
 
 
@@ -283,8 +287,6 @@ void seePet( int clientId )
 void deletePet(int clientId )
 {
 	int registerId = RegisterFromClient( clientId );
-	
-	pthread_mutex_lock(&mutex);
 
 	struct dogType * mascotaFinal;
 	mascotaFinal = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
@@ -293,6 +295,8 @@ void deletePet(int clientId )
 		perror("error en el malloc de la mascota");
 		exit( -1 );
 	}
+
+	pthread_mutex_lock(&mutex);
 	getMascota( countRegisters()-1, mascotaFinal );
 
 	struct dogType * mascotaDelete;
