@@ -60,6 +60,8 @@ unsigned char operation [NOMBRE_SIZE];
 unsigned char cause [NOMBRE_SIZE];
 
 
+int pipefd[2], writePipe = 1, readPipe;
+
 int getHash();
 int countRegisters();
 void saveDog();
@@ -106,8 +108,20 @@ int menu( int clientId )
 			return 0; 
 		default:
 		printf("ingrese una opción valida\n");
-	}	
+	}
+	
+		
+	if( read(pipefd[0], &readPipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
 	saveHeads();
+	if( write(pipefd[1], &writePipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el write del pipe");
+		exit(-1);
+	}
 	return 1;
 }
 
@@ -132,6 +146,20 @@ int main()
 
 	for( int i = 0; i < MAX_CLIENTS; ++ i )
 		arg[i] = i;
+
+	if( pipe( pipefd ) == -1 )
+	{
+		perror("Error creando el pipe");
+		exit(-1);
+	}
+
+	
+	if( write(pipefd[1], &writePipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el write del pipe");
+		exit(-1);
+	}
+
 
 	while( 1 ) 
 	{
@@ -160,9 +188,10 @@ int main()
 		
 		pthread_create(&idThread[idx], NULL, run, (void*)&arg[idx]);
 		
-
 	}
 
+	close(pipefd[0]);
+	close(pipefd[1]);
 	return 0;
 }
 
@@ -185,11 +214,26 @@ void enterPet( int clientId )
 		exit(-1);
 	}
 
+
 	int hash = getHash( mascota -> nombre );
+
+	
+	if( read(pipefd[0], &readPipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
 	mascota -> idPrev = lastID[hash];
 	lastID[hash] = countRegisters();
 
 	saveDog( mascota );
+
+	if( write(pipefd[1], &writePipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el write del pipe");
+		exit(-1);
+	}
+
 
 	SendConfirmation(1, clientId);	
 
@@ -208,13 +252,26 @@ void seePet( int clientId )
 {
 
 	int registerId = RegisterFromClient( clientId );
-	
+	int hcConfirmation;
+
 	struct dogType * mascota;
 	mascota = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
 	if( mascota == NULL )
 	{
 		perror("error en el malloc de la mascota");
 		exit( -1 );
+	}
+
+	
+	if( read(pipefd[0], &readPipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
+
+	if(registerId >= countRegisters() || registerId < 0){
+		printf("El número de registros ha cambiado o el registro es inválido\n");
+		return;
 	}
 
 	getMascota(registerId, mascota);
@@ -243,24 +300,40 @@ void seePet( int clientId )
 		perror("Error enviando comando historia clinica");
 		exit(-1);
 	}
+
+	if( write(pipefd[1], &writePipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el write del pipe");
+		exit(-1);
+	}
+
+
+	r = recv(fdc[clientId], &hcConfirmation,sizeof(int),0);
+	if( r != sizeof(registerId))
+	{
+		perror("error recibiendo id del cliente");
+		exit(-1);
+	}
+
+	
+
 	free(mascota);
 
 	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	strcat( operation, "lectura");
+	strcat( operation, "lectura");
 
-     	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	sprintf( cause, "%d",registerId);
+ 	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+	sprintf( cause, "%d",registerId);
 
-    	logOperation(operation,cause,clientId);
+	logOperation(operation,cause,clientId);
 }
 
 
 
 void deletePet(int clientId )
 {
-
 	int registerId = RegisterFromClient( clientId );
-		
+
 	struct dogType * mascotaFinal;
 	mascotaFinal = ( struct  dogType *) malloc( sizeof ( struct dogType ) );	
 	if( mascotaFinal == NULL )
@@ -268,6 +341,16 @@ void deletePet(int clientId )
 		perror("error en el malloc de la mascota");
 		exit( -1 );
 	}
+
+	
+	if( read(pipefd[0], &readPipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
+
+
+	
 	getMascota( countRegisters()-1, mascotaFinal );
 
 	struct dogType * mascotaDelete;
@@ -415,7 +498,7 @@ void deletePet(int clientId )
 			}
 		}
 	}
-	fclose(dbTmp); 
+	fclose(dbTmp);
 
 	status = remove( "dataDogs.dat" );	
 	if( status != 0 )
@@ -469,13 +552,19 @@ void deletePet(int clientId )
 		}
 		
 	}
+	
+	if( write(pipefd[1], &writePipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
+	
+	
+	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+	strcat( operation, "borrado");
 
-
-    	memset( operation, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	strcat( operation, "borrado");
-
-    	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
-    	sprintf( cause,"%d", registerId);
+	memset( cause, 0, NOMBRE_SIZE * sizeof ( unsigned char ) );
+	sprintf( cause,"%d", registerId);
 
 	free(mascotaFinal);
 	free(mascotaDelete);
@@ -501,6 +590,13 @@ void searchPet( int clientId )
 	int hash, currId, i, equal, a, b;
 	hash = getHash( buff );
 	
+		
+	if( read(pipefd[0], &readPipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
+
 	currId = lastID[hash];
 
 	struct dogType * mascota;
@@ -535,6 +631,13 @@ void searchPet( int clientId )
 		}
 		currId = mascota -> idPrev;
 	}
+	
+	if( write(pipefd[1], &writePipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
+
 
 	free(mascota);
 	SendConfirmation(-1, clientId );
@@ -830,8 +933,14 @@ void generateHc(char* hcName, struct dogType* mascota){
 
 void logOperation(unsigned char* operation, unsigned char* cause, int clientId ){
 	
-
-	struct logData * log;
+		
+	if( read(pipefd[0], &readPipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el read del pipe");
+		exit(-1);
+	}
+	
+struct logData * log;
         log = ( struct  logData *) malloc( sizeof ( struct logData ) );
         if( log == NULL )
         {
@@ -867,19 +976,19 @@ void logOperation(unsigned char* operation, unsigned char* cause, int clientId )
         strcat(actualTime, times);
         strcat(actualTime, "|");
 	
-	memset( log->date, 0, NOMBRE_SIZE );
+		memset( log->date, 0, NOMBRE_SIZE );
         strcpy(log->date, actualTime);
 
 
         char ipAddr[INET_ADDRSTRLEN];
-	inet_ntop( AF_INET, &(client[clientId].sin_addr), ipAddr, INET_ADDRSTRLEN);
+		inet_ntop( AF_INET, &(client[clientId].sin_addr), ipAddr, INET_ADDRSTRLEN);
         
-	memset(log->ip, 0, NOMBRE_SIZE);	
+		memset(log->ip, 0, NOMBRE_SIZE);	
 
-	strcpy(log->ip, ipAddr);
+		strcpy(log->ip, ipAddr);
 
-	memset(log->operation,0,NOMBRE_SIZE);
-	memset(log->cause, 0, NOMBRE_SIZE);
+		memset(log->operation,0,NOMBRE_SIZE);
+		memset(log->cause, 0, NOMBRE_SIZE);
 
         strcpy(log->operation, operation);
         strcpy(log->cause, cause);
@@ -897,4 +1006,9 @@ void logOperation(unsigned char* operation, unsigned char* cause, int clientId )
 	}
 	fclose(logFile);
 	free(log);
+	if( write(pipefd[1], &writePipe, sizeof(int) ) == 0 )
+	{
+		perror("Error en el write del pipe");
+		exit(-1);
+	}
 }
